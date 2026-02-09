@@ -13,6 +13,7 @@ let roomId = null;
 let localStream = null;
 let peers = new Map();
 let faceDetector = null;
+let joinTime = 0;
 
 // Metered Open Relay TURN (free tier) requires credentials from their dashboard.
 // Fill these in with the values you receive from Metered.
@@ -113,14 +114,40 @@ function startFaceLoop(video, canvas) {
   scheduleNext();
 }
 
+function isPolitePeer(remoteId) {
+  return peerId < remoteId;
+}
+
 function createPeerConnection(remoteId) {
   const pc = new RTCPeerConnection(rtcConfig);
 
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
   console.log('[pc] addTrack', remoteId, localStream.getTracks().map((t) => t.kind));
 
+  let makingOffer = false;
+  let ignoreOffer = false;
+
   pc.onsignalingstatechange = () => {
     console.log('[pc] signalingState', remoteId, pc.signalingState);
+  };
+
+  pc.onnegotiationneeded = async () => {
+    try {
+      makingOffer = true;
+      const offer = await pc.createOffer();
+      if (pc.signalingState !== 'stable') return;
+      await pc.setLocalDescription(offer);
+      console.log('[pc] send offer', remoteId, 'negotiationneeded');
+      socket.send(JSON.stringify({
+        type: 'signal',
+        to: remoteId,
+        data: { sdp: pc.localDescription }
+      }));
+    } catch (err) {
+      console.warn('[pc] negotiationneeded failed', remoteId, err);
+    } finally {
+      makingOffer = false;
+    }
   };
 
   pc.onicecandidate = (event) => {
@@ -181,7 +208,12 @@ function createPeerConnection(remoteId) {
     console.log('[pc] iceConnectionState', remoteId, pc.iceConnectionState);
   };
 
-  return pc;
+  return {
+    pc,
+    makingOfferRef: () => makingOffer,
+    setIgnoreOffer: (v) => { ignoreOffer = v; },
+    getIgnoreOffer: () => ignoreOffer
+  };
 }
 
 function createRemoteTile(remoteId) {
@@ -224,18 +256,25 @@ function removePeer(remoteId) {
 async function handleSignal(from, data) {
   let entry = peers.get(from);
   if (!entry) {
-    const pc = createPeerConnection(from);
-    entry = { pc };
+    const pcState = createPeerConnection(from);
+    entry = { pc: pcState.pc, pcState };
     peers.set(from, entry);
   }
 
   const pc = entry.pc;
+  const pcState = entry.pcState;
 
   if (data.sdp) {
     console.log('[pc] recv sdp', from, data.sdp.type, pc.signalingState);
-    if (data.sdp.type === 'answer' && pc.signalingState !== 'have-local-offer') {
-      console.warn('[pc] ignoring answer in state', pc.signalingState);
-      return;
+    const offerCollision = data.sdp.type === 'offer' &&
+      (pcState.getIgnoreOffer() || pcState.makingOfferRef() || pc.signalingState !== 'stable');
+    const polite = isPolitePeer(from);
+    if (offerCollision) {
+      pcState.setIgnoreOffer(!polite);
+      if (!polite) {
+        console.warn('[pc] ignoring offer due to collision', from);
+        return;
+      }
     }
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     if (data.sdp.type === 'offer') {
@@ -261,11 +300,15 @@ async function handleSignal(from, data) {
 }
 
 async function createOffer(remoteId) {
-  const entry = peers.get(remoteId) || { pc: createPeerConnection(remoteId) };
+  const entry = peers.get(remoteId) || (() => {
+    const pcState = createPeerConnection(remoteId);
+    return { pc: pcState.pc, pcState };
+  })();
   peers.set(remoteId, entry);
+  if (entry.pc.signalingState !== 'stable') return;
   const offer = await entry.pc.createOffer();
   await entry.pc.setLocalDescription(offer);
-  console.log('[pc] send offer', remoteId);
+  console.log('[pc] send offer', remoteId, 'manual');
   socket.send(JSON.stringify({
     type: 'signal',
     to: remoteId,
@@ -280,6 +323,7 @@ function connectSocket() {
   socket.addEventListener('open', () => {
     console.log('[ws] open');
     socket.send(JSON.stringify({ type: 'join', roomId, peerId }));
+    joinTime = Date.now();
   });
 
   socket.addEventListener('message', async (event) => {
@@ -288,14 +332,18 @@ function connectSocket() {
     if (msg.type === 'peers') {
       console.log('[ws] peers', msg.peers);
       for (const id of msg.peers) {
-        await createOffer(id);
+        if (isPolitePeer(id)) {
+          await createOffer(id);
+        }
       }
       return;
     }
 
     if (msg.type === 'peer-joined') {
       console.log('[ws] peer-joined', msg.peerId);
-      await createOffer(msg.peerId);
+      if (isPolitePeer(msg.peerId)) {
+        await createOffer(msg.peerId);
+      }
       return;
     }
 
