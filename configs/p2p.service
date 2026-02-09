@@ -10,6 +10,7 @@ Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
 Environment=PORT=3001
+Environment=SIGNALING_URL=ws://127.0.0.1:3001
 
 # Hardening (optional)
 NoNewPrivileges=true
