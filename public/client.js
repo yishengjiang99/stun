@@ -214,8 +214,16 @@ function createPeerConnection(remoteId) {
   };
 
   pc.ontrack = (event) => {
-    const [stream] = event.streams;
-    if (!stream) return;
+    let [stream] = event.streams;
+    if (!stream) {
+      const entry = peers.get(remoteId);
+      if (entry && entry.stream) {
+        entry.stream.addTrack(event.track);
+        stream = entry.stream;
+      } else {
+        stream = new MediaStream([event.track]);
+      }
+    }
     console.log('[pc] ontrack', remoteId, event.track.kind, event.track.readyState);
 
     let entry = peers.get(remoteId);

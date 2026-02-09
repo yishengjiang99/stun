@@ -39,11 +39,12 @@ export function createServer({ publicDir = defaultPublicDir } = {}) {
       }
 
       const ext = path.extname(filePath);
-      const contentType = {
-        '.html': 'text/html',
-        '.js': 'text/javascript',
-        '.css': 'text/css'
-      }[ext] || 'application/octet-stream';
+    const contentType = {
+      '.html': 'text/html',
+      '.js': 'text/javascript',
+      '.css': 'text/css',
+      '.ico': 'image/x-icon'
+    }[ext] || 'application/octet-stream';
 
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(data);
