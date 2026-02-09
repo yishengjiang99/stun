@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/Users/yishengj/stun
-ExecStart=/usr/bin/node /Users/yishengj/stun/server.js
+WorkingDirectory=/root/stun
+ExecStart=/usr/bin/node /root/stun/server.js
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
@@ -15,7 +15,8 @@ Environment=PORT=3001
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
-ProtectHome=true
+# ProtectHome=true blocks access to /root; disable for /root deployments
+ProtectHome=false
 
 [Install]
 WantedBy=multi-user.target
