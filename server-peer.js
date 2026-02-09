@@ -34,6 +34,7 @@ function createVideoTrack() {
 function startVideoSource(source) {
   const frameSize = Math.floor(WIDTH * HEIGHT * 1.5);
   let buffer = Buffer.alloc(0);
+  let frames = 0;
 
   const command = ffmpeg()
     .input(DEMO_VIDEO_PATH || 'testsrc=size=1280x720:rate=30')
@@ -49,6 +50,9 @@ function startVideoSource(source) {
     .on('start', (cmd) => {
       console.log('[server-peer] ffmpeg start', cmd);
     })
+    .on('stderr', (line) => {
+      console.log('[server-peer] ffmpeg', line);
+    })
     .on('error', (err) => {
       console.error('[server-peer] ffmpeg error', err);
     });
@@ -59,12 +63,19 @@ function startVideoSource(source) {
     while (buffer.length >= frameSize) {
       const frame = buffer.subarray(0, frameSize);
       buffer = buffer.subarray(frameSize);
+      frames += 1;
+      if (frames % 60 === 0) {
+        console.log('[server-peer] frames pushed', frames);
+      }
       source.onFrame({
         width: WIDTH,
         height: HEIGHT,
         data: new Uint8ClampedArray(frame.buffer, frame.byteOffset, frame.byteLength)
       });
     }
+  });
+  stream.on('error', (err) => {
+    console.error('[server-peer] stream error', err);
   });
 
   return () => {
