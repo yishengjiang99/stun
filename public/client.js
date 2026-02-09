@@ -151,9 +151,11 @@ function createPeerConnection(remoteId) {
     }
 
     entry.video.srcObject = stream;
-    entry.video.play().catch((err) => {
-      console.warn('[pc] video.play failed', remoteId, err);
-    });
+    if (entry.video.isConnected) {
+      entry.video.play().catch((err) => {
+        console.warn('[pc] video.play failed', remoteId, err);
+      });
+    }
 
     const track = stream.getVideoTracks()[0];
     if (track) {
@@ -171,7 +173,7 @@ function createPeerConnection(remoteId) {
 
   pc.onconnectionstatechange = () => {
     console.log('[pc] connectionState', remoteId, pc.connectionState);
-    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+    if (pc.connectionState === 'failed') {
       removePeer(remoteId);
     }
   };
