@@ -154,4 +154,10 @@ if (isEntry) {
   server.listen(PORT, () => {
     console.log(`Signaling server running on http://localhost:${PORT}`);
   });
+
+  if (process.env.START_SERVER_PEER === '1') {
+    import('./server-peer.js').catch((err) => {
+      console.error('[server-peer] failed to start', err);
+    });
+  }
 }
