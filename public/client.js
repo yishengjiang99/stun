@@ -166,6 +166,7 @@ function startFaceLoop(video, canvas) {
 }
 
 function isPolitePeer(remoteId) {
+  if (remoteId === 'server-bot') return false;
   return peerId < remoteId;
 }
 
