@@ -117,6 +117,11 @@ function createPeerConnection(remoteId) {
   const pc = new RTCPeerConnection(rtcConfig);
 
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  console.log('[pc] addTrack', remoteId, localStream.getTracks().map((t) => t.kind));
+
+  pc.onsignalingstatechange = () => {
+    console.log('[pc] signalingState', remoteId, pc.signalingState);
+  };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
@@ -131,19 +136,33 @@ function createPeerConnection(remoteId) {
   pc.ontrack = (event) => {
     const [stream] = event.streams;
     if (!stream) return;
+    console.log('[pc] ontrack', remoteId, event.track.kind, event.track.readyState);
 
     let entry = peers.get(remoteId);
     if (entry && entry.stream === stream) return;
 
-    if (!entry) {
-      entry = createRemoteTile(remoteId);
-      peers.set(remoteId, { ...entry, pc, stream });
+    if (!entry || !entry.video) {
+      const tile = createRemoteTile(remoteId);
+      entry = { ...(entry || {}), ...tile, pc, stream };
+      peers.set(remoteId, entry);
+    } else {
+      entry.stream = stream;
+      peers.set(remoteId, entry);
     }
 
     entry.video.srcObject = stream;
+    entry.video.play().catch((err) => {
+      console.warn('[pc] video.play failed', remoteId, err);
+    });
 
     const track = stream.getVideoTracks()[0];
     if (track) {
+      track.addEventListener('unmute', () => {
+        console.log('[pc] track unmute', remoteId);
+      });
+      track.addEventListener('mute', () => {
+        console.log('[pc] track mute', remoteId);
+      });
       track.addEventListener('unmute', () => {
         startFaceLoop(entry.video, entry.canvas);
       }, { once: true });
@@ -151,9 +170,13 @@ function createPeerConnection(remoteId) {
   };
 
   pc.onconnectionstatechange = () => {
+    console.log('[pc] connectionState', remoteId, pc.connectionState);
     if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
       removePeer(remoteId);
     }
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log('[pc] iceConnectionState', remoteId, pc.iceConnectionState);
   };
 
   return pc;
@@ -207,10 +230,16 @@ async function handleSignal(from, data) {
   const pc = entry.pc;
 
   if (data.sdp) {
+    console.log('[pc] recv sdp', from, data.sdp.type, pc.signalingState);
+    if (data.sdp.type === 'answer' && pc.signalingState !== 'have-local-offer') {
+      console.warn('[pc] ignoring answer in state', pc.signalingState);
+      return;
+    }
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     if (data.sdp.type === 'offer') {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('[pc] send answer', from);
       socket.send(JSON.stringify({
         type: 'signal',
         to: from,
@@ -221,6 +250,7 @@ async function handleSignal(from, data) {
 
   if (data.candidate) {
     try {
+      console.log('[pc] recv candidate', from);
       await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
     } catch {
       // ignore
@@ -233,6 +263,7 @@ async function createOffer(remoteId) {
   peers.set(remoteId, entry);
   const offer = await entry.pc.createOffer();
   await entry.pc.setLocalDescription(offer);
+  console.log('[pc] send offer', remoteId);
   socket.send(JSON.stringify({
     type: 'signal',
     to: remoteId,
@@ -244,6 +275,7 @@ function connectSocket() {
   socket = new WebSocket(`ws://${location.host}`);
 
   socket.addEventListener('open', () => {
+    console.log('[ws] open');
     socket.send(JSON.stringify({ type: 'join', roomId, peerId }));
   });
 
@@ -251,6 +283,7 @@ function connectSocket() {
     const msg = JSON.parse(event.data);
 
     if (msg.type === 'peers') {
+      console.log('[ws] peers', msg.peers);
       for (const id of msg.peers) {
         await createOffer(id);
       }
@@ -258,21 +291,25 @@ function connectSocket() {
     }
 
     if (msg.type === 'peer-joined') {
+      console.log('[ws] peer-joined', msg.peerId);
       await createOffer(msg.peerId);
       return;
     }
 
     if (msg.type === 'peer-left') {
+      console.log('[ws] peer-left', msg.peerId);
       removePeer(msg.peerId);
       return;
     }
 
     if (msg.type === 'signal') {
+      console.log('[ws] signal from', msg.from);
       await handleSignal(msg.from, msg.data);
     }
   });
 
   socket.addEventListener('close', () => {
+    console.log('[ws] close');
     logStatus(localStatus, 'Disconnected');
   });
 }
