@@ -1,0 +1,13 @@
+{
+  "name": "webrtc-p2p-facebox",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "P2P WebRTC video conferencing with face boxes",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

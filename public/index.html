@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>P2P WebRTC Face Box</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">P2P FaceBox</div>
+    <div class="controls">
+      <input id="roomInput" placeholder="Room ID" value="demo-room" />
+      <button id="joinBtn">Join</button>
+      <button id="leaveBtn" disabled>Leave</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel">
+      <h2>Local</h2>
+      <div class="video-wrap" id="localWrap">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <canvas id="localCanvas"></canvas>
+      </div>
+      <div class="status" id="localStatus">Not connected</div>
+    </section>
+
+    <section class="panel">
+      <h2>Remote</h2>
+      <div id="remoteGrid" class="remote-grid"></div>
+      <div class="status" id="remoteStatus">No peers</div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Face detection uses the browser FaceDetector API if available.
+  </footer>
+
+  <script type="module" src="client.js"></script>
+</body>
+</html>
