@@ -105,6 +105,42 @@ video, canvas {
   font-size: 14px;
 }
 
+.hidden {
+  display: none;
+}
+
+.room-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.room-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.room-list li {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #223244;
+  background: #0f1822;
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.room-list .empty {
+  justify-content: center;
+  color: var(--muted);
+  border-style: dashed;
+}
+
 .footer {
   padding: 12px 24px 20px;
   color: var(--muted);

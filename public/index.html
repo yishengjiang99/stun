@@ -18,8 +18,21 @@
 
   <main class="grid">
     <section class="panel">
+      <h2>Rooms</h2>
+      <div class="room-meta">
+        <span>Selected:</span>
+        <span id="currentRoom">Not joined</span>
+      </div>
+      <div class="room-meta">
+        <span>Participants:</span>
+        <span id="currentRoomCount">0</span>
+      </div>
+      <ul id="roomList" class="room-list"></ul>
+    </section>
+
+    <section class="panel">
       <h2>Local</h2>
-      <div class="video-wrap" id="localWrap">
+      <div class="video-wrap hidden" id="localWrap">
         <video id="localVideo" autoplay playsinline muted></video>
         <canvas id="localCanvas"></canvas>
       </div>
@@ -28,7 +41,7 @@
 
     <section class="panel">
       <h2>Remote</h2>
-      <div id="remoteGrid" class="remote-grid"></div>
+      <div id="remoteGrid" class="remote-grid hidden"></div>
       <div class="status" id="remoteStatus">No peers</div>
     </section>
   </main>

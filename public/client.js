@@ -6,6 +6,10 @@ const localCanvas = document.getElementById('localCanvas');
 const localStatus = document.getElementById('localStatus');
 const remoteGrid = document.getElementById('remoteGrid');
 const remoteStatus = document.getElementById('remoteStatus');
+const localWrap = document.getElementById('localWrap');
+const roomList = document.getElementById('roomList');
+const currentRoom = document.getElementById('currentRoom');
+const currentRoomCount = document.getElementById('currentRoomCount');
 
 const peerId = crypto.randomUUID();
 let socket = null;
@@ -14,6 +18,7 @@ let localStream = null;
 let peers = new Map();
 let faceDetector = null;
 let joinTime = 0;
+let roomsTimer = null;
 
 // Metered Open Relay TURN (free tier) requires credentials from their dashboard.
 // Fill these in with the values you receive from Metered.
@@ -36,6 +41,52 @@ const rtcConfig = {
 
 function logStatus(target, text) {
   target.textContent = text;
+}
+
+function setVideoVisibility(visible) {
+  localWrap.classList.toggle('hidden', !visible);
+  remoteGrid.classList.toggle('hidden', !visible);
+}
+
+function renderRooms(rooms) {
+  roomList.innerHTML = '';
+  if (!rooms.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No active rooms';
+    roomList.appendChild(li);
+    return;
+  }
+
+  for (const room of rooms) {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    const count = document.createElement('span');
+    name.textContent = room.roomId;
+    count.textContent = `${room.participants}`;
+    li.appendChild(name);
+    li.appendChild(count);
+    roomList.appendChild(li);
+  }
+}
+
+async function refreshRooms() {
+  try {
+    const res = await fetch('/rooms');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderRooms(data.rooms || []);
+    if (roomId) {
+      const current = (data.rooms || []).find((room) => room.roomId === roomId);
+      currentRoom.textContent = roomId;
+      currentRoomCount.textContent = current ? String(current.participants) : '0';
+    } else {
+      currentRoom.textContent = 'Not joined';
+      currentRoomCount.textContent = '0';
+    }
+  } catch {
+    // ignore fetch errors
+  }
 }
 
 async function initLocalMedia() {
@@ -384,9 +435,11 @@ joinBtn.addEventListener('click', async () => {
   roomId = roomInput.value.trim() || 'demo-room';
   setupFaceDetector();
   await initLocalMedia();
+  setVideoVisibility(true);
   connectSocket();
   logStatus(localStatus, `Joined ${roomId}`);
   leaveBtn.disabled = false;
+  await refreshRooms();
 });
 
 leaveBtn.addEventListener('click', () => {
@@ -395,8 +448,15 @@ leaveBtn.addEventListener('click', () => {
   joinBtn.disabled = false;
   logStatus(localStatus, 'Not connected');
   updateRemoteStatus();
+  setVideoVisibility(false);
+  roomId = null;
+  refreshRooms();
 });
 
 window.addEventListener('beforeunload', () => {
   cleanup();
 });
+
+setVideoVisibility(false);
+refreshRooms();
+roomsTimer = setInterval(refreshRooms, 3000);

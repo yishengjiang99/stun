@@ -12,6 +12,17 @@ export function createServer({ publicDir = defaultPublicDir } = {}) {
   const server = http.createServer((req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
     const urlPath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
+
+    if (requestUrl.pathname === '/rooms') {
+      const list = Array.from(rooms.entries()).map(([id, room]) => ({
+        roomId: id,
+        participants: room.size
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ rooms: list }));
+      return;
+    }
+
     const filePath = path.join(publicDir, decodeURIComponent(urlPath));
 
     if (!filePath.startsWith(publicDir)) {
