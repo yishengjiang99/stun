@@ -272,7 +272,8 @@ async function createOffer(remoteId) {
 }
 
 function connectSocket() {
-  socket = new WebSocket(`ws://${location.host}`);
+  const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  socket = new WebSocket(`${wsProtocol}://${location.host}`);
 
   socket.addEventListener('open', () => {
     console.log('[ws] open');
