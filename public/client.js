@@ -183,6 +183,7 @@ function createPeerConnection(remoteId) {
   };
 
   pc.onnegotiationneeded = async () => {
+    if (!isPolitePeer(remoteId)) return;
     try {
       makingOffer = true;
       const offer = await pc.createOffer();
@@ -350,21 +351,10 @@ async function handleSignal(from, data) {
   }
 }
 
-async function createOffer(remoteId) {
-  const entry = peers.get(remoteId) || (() => {
-    const pcState = createPeerConnection(remoteId);
-    return { pc: pcState.pc, pcState };
-  })();
-  peers.set(remoteId, entry);
-  if (entry.pc.signalingState !== 'stable') return;
-  const offer = await entry.pc.createOffer();
-  await entry.pc.setLocalDescription(offer);
-  console.log('[pc] send offer', remoteId, 'manual');
-  socket.send(JSON.stringify({
-    type: 'signal',
-    to: remoteId,
-    data: { sdp: entry.pc.localDescription }
-  }));
+function ensurePeer(remoteId) {
+  if (peers.has(remoteId)) return;
+  const pcState = createPeerConnection(remoteId);
+  peers.set(remoteId, { pc: pcState.pc, pcState });
 }
 
 function connectSocket() {
@@ -383,18 +373,14 @@ function connectSocket() {
     if (msg.type === 'peers') {
       console.log('[ws] peers', msg.peers);
       for (const id of msg.peers) {
-        if (isPolitePeer(id)) {
-          await createOffer(id);
-        }
+        ensurePeer(id);
       }
       return;
     }
 
     if (msg.type === 'peer-joined') {
       console.log('[ws] peer-joined', msg.peerId);
-      if (isPolitePeer(msg.peerId)) {
-        await createOffer(msg.peerId);
-      }
+      ensurePeer(msg.peerId);
       return;
     }
 
