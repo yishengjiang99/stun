@@ -1,7 +1,7 @@
 import { WebSocket } from 'ws';
 import wrtc from 'wrtc';
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from 'ffmpeg-static';
+import ffmpegStaticPath from 'ffmpeg-static';
 
 const {
   RTCPeerConnection,
@@ -19,10 +19,12 @@ const WIDTH = Number(process.env.DEMO_VIDEO_WIDTH || 1280);
 const HEIGHT = Number(process.env.DEMO_VIDEO_HEIGHT || 720);
 const FPS = Number(process.env.DEMO_VIDEO_FPS || 30);
 
-if (ffmpegPath) {
-  ffmpeg.setFfmpegPath(ffmpegPath);
+const resolvedFfmpegPath = process.env.FFMPEG_PATH || ffmpegStaticPath || null;
+if (resolvedFfmpegPath) {
+  ffmpeg.setFfmpegPath(resolvedFfmpegPath);
+  console.log('[server-peer] ffmpeg path', resolvedFfmpegPath);
 } else {
-  console.warn('[server-peer] ffmpeg-static not found; ensure ffmpeg is installed');
+  console.warn('[server-peer] ffmpeg path not set; ensure ffmpeg is installed and set FFMPEG_PATH');
 }
 
 function isPolitePeer(remoteId) {
