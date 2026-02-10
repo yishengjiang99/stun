@@ -16,7 +16,7 @@ const {
 const ROOM_ID = process.env.DEMO_ROOM_ID || 'demo-room';
 const PEER_ID = process.env.DEMO_PEER_ID || 'server-bot';
 const SIGNALING_URL = process.env.SIGNALING_URL || 'ws://127.0.0.1:3000';
-const DEMO_VIDEO_PATH = process.env.DEMO_VIDEO_PATH || '';
+const DEMO_VIDEO_PATH = process.env.DEMO_VIDEO_PATH || path.join(process.cwd(), 'assets', 'demo.mp4');
 
 const WIDTH = Number(process.env.DEMO_VIDEO_WIDTH || 1280);
 const HEIGHT = Number(process.env.DEMO_VIDEO_HEIGHT || 720);
@@ -43,37 +43,14 @@ function createVideoTrack() {
   return { source, track };
 }
 
-async function ensureDemoFile() {
-  const filePath = path.join(os.tmpdir(), 'server-bot-testsrc.mp4');
-  try {
-    await fs.access(filePath);
-    return filePath;
-  } catch {
-    // continue to generate
-  }
-
-  console.log('[server-peer] generating demo mp4', filePath);
-  await new Promise((resolve, reject) => {
-    ffmpeg()
-      .input(`testsrc=size=${WIDTH}x${HEIGHT}:rate=${FPS}:duration=10`)
-      .inputFormat('lavfi')
-      .outputOptions(['-c:v', 'libx264', '-pix_fmt', 'yuv420p'])
-      .on('start', (cmd) => {
-        console.log('[server-peer] ffmpeg demo start', cmd);
-      })
-      .on('stderr', (line) => {
-        console.log('[server-peer] ffmpeg demo', line);
-      })
-      .on('error', (err) => reject(err))
-      .on('end', () => resolve())
-      .save(filePath);
-  });
-
-  return filePath;
-}
-
 async function startVideoSource() {
-  const demoPath = DEMO_VIDEO_PATH || await ensureDemoFile();
+  const demoPath = DEMO_VIDEO_PATH;
+  try {
+    await fs.access(demoPath);
+  } catch {
+    console.error('[server-peer] demo video not found', demoPath);
+    throw new Error(`Demo video not found: ${demoPath}`);
+  }
   console.log('[server-peer] start video source', {
     width: WIDTH,
     height: HEIGHT,
