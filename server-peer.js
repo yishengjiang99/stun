@@ -19,7 +19,11 @@ const WIDTH = Number(process.env.DEMO_VIDEO_WIDTH || 1280);
 const HEIGHT = Number(process.env.DEMO_VIDEO_HEIGHT || 720);
 const FPS = Number(process.env.DEMO_VIDEO_FPS || 30);
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+} else {
+  console.warn('[server-peer] ffmpeg-static not found; ensure ffmpeg is installed');
+}
 
 function isPolitePeer(remoteId) {
   return PEER_ID < remoteId;
@@ -32,13 +36,24 @@ function createVideoTrack() {
 }
 
 function startVideoSource(source) {
+  console.log('[server-peer] start video source', {
+    width: WIDTH,
+    height: HEIGHT,
+    fps: FPS,
+    demoPath: DEMO_VIDEO_PATH || 'testsrc'
+  });
   const frameSize = Math.floor(WIDTH * HEIGHT * 1.5);
   let buffer = Buffer.alloc(0);
   let frames = 0;
 
-  const command = ffmpeg()
-    .input(DEMO_VIDEO_PATH || 'testsrc=size=1280x720:rate=30')
-    .inputOptions(DEMO_VIDEO_PATH ? ['-stream_loop', '-1'] : ['-f', 'lavfi'])
+  const command = ffmpeg();
+  if (DEMO_VIDEO_PATH) {
+    command.input(DEMO_VIDEO_PATH).inputOptions(['-stream_loop', '-1']);
+  } else {
+    command.input(`testsrc=size=${WIDTH}x${HEIGHT}:rate=${FPS}`).inputFormat('lavfi');
+  }
+
+  command
     .outputOptions([
       '-an',
       '-c:v', 'rawvideo',
