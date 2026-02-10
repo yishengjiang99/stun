@@ -95,8 +95,8 @@ async function startVideoSource() {
         if (headerEnd === -1) return;
         const header = buffer.subarray(0, headerEnd).toString();
         buffer = buffer.subarray(headerEnd + 1);
-        const wMatch = header.match(/W(\\d+)/);
-        const hMatch = header.match(/H(\\d+)/);
+        const wMatch = header.match(/W(\d+)/);
+        const hMatch = header.match(/H(\d+)/);
         if (wMatch && hMatch) {
           frameWidth = Number(wMatch[1]);
           frameHeight = Number(hMatch[1]);
