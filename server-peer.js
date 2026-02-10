@@ -34,8 +34,11 @@ function isPolitePeer(remoteId) {
   return PEER_ID < remoteId;
 }
 
+const videoSources = new Set();
+
 function createVideoTrack() {
   const source = new RTCVideoSource();
+  videoSources.add(source);
   const track = source.createTrack();
   return { source, track };
 }
@@ -69,7 +72,7 @@ async function ensureDemoFile() {
   return filePath;
 }
 
-async function startVideoSource(source) {
+async function startVideoSource() {
   const demoPath = DEMO_VIDEO_PATH || await ensureDemoFile();
   console.log('[server-peer] start video source', {
     width: WIDTH,
@@ -147,11 +150,13 @@ async function startVideoSource(source) {
       try {
         const data = new Uint8ClampedArray(expectedFrameSize);
         data.set(frame);
-        source.onFrame({
-          width: frameWidth,
-          height: frameHeight,
-          data
-        });
+        for (const source of videoSources) {
+          source.onFrame({
+            width: frameWidth,
+            height: frameHeight,
+            data
+          });
+        }
       } catch (err) {
         console.error('[server-peer] onFrame error', err);
       }
@@ -217,7 +222,6 @@ function createPeerConnection(socket, remoteId) {
   return {
     pc,
     source,
-    startMedia: () => startVideoSource(source),
     makingOfferRef: () => makingOffer,
     getIgnoreOffer: () => ignoreOffer,
     setIgnoreOffer: (v) => { ignoreOffer = v; }
@@ -234,6 +238,11 @@ function createSignalingClient() {
   socket.on('open', () => {
     console.log('[server-peer] ws open', SIGNALING_URL);
     socket.send(JSON.stringify({ type: 'join', roomId: ROOM_ID, peerId: PEER_ID }));
+    if (!stopMediaPromise) {
+      stopMediaPromise = startVideoSource().then((stop) => { stopMedia = stop; }).catch((err) => {
+        console.error('[server-peer] startMedia failed', err);
+      });
+    }
   });
 
   socket.on('message', async (raw) => {
@@ -249,11 +258,6 @@ function createSignalingClient() {
         if (!peers.has(id)) {
           const peerState = createPeerConnection(socket, id);
           peers.set(id, peerState);
-          if (!stopMediaPromise) {
-            stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
-              console.error('[server-peer] startMedia failed', err);
-            });
-          }
         }
       }
       return;
@@ -263,11 +267,6 @@ function createSignalingClient() {
       if (!peers.has(msg.peerId)) {
         const peerState = createPeerConnection(socket, msg.peerId);
         peers.set(msg.peerId, peerState);
-        if (!stopMediaPromise) {
-          stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
-            console.error('[server-peer] startMedia failed', err);
-          });
-        }
       }
       return;
     }
@@ -285,11 +284,6 @@ function createSignalingClient() {
       const peerState = peers.get(msg.from) || createPeerConnection(socket, msg.from);
       if (!peers.has(msg.from)) {
         peers.set(msg.from, peerState);
-        if (!stopMediaPromise) {
-          stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
-            console.error('[server-peer] startMedia failed', err);
-          });
-        }
       }
 
       const pc = peerState.pc;
