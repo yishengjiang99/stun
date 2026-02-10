@@ -1,4 +1,7 @@
 import { WebSocket } from 'ws';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import wrtc from 'wrtc';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStaticPath from 'ffmpeg-static';
@@ -37,23 +40,49 @@ function createVideoTrack() {
   return { source, track };
 }
 
-function startVideoSource(source) {
+async function ensureDemoFile() {
+  const filePath = path.join(os.tmpdir(), 'server-bot-testsrc.mp4');
+  try {
+    await fs.access(filePath);
+    return filePath;
+  } catch {
+    // continue to generate
+  }
+
+  console.log('[server-peer] generating demo mp4', filePath);
+  await new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(`testsrc=size=${WIDTH}x${HEIGHT}:rate=${FPS}:duration=10`)
+      .inputFormat('lavfi')
+      .outputOptions(['-c:v', 'libx264', '-pix_fmt', 'yuv420p'])
+      .on('start', (cmd) => {
+        console.log('[server-peer] ffmpeg demo start', cmd);
+      })
+      .on('stderr', (line) => {
+        console.log('[server-peer] ffmpeg demo', line);
+      })
+      .on('error', (err) => reject(err))
+      .on('end', () => resolve())
+      .save(filePath);
+  });
+
+  return filePath;
+}
+
+async function startVideoSource(source) {
+  const demoPath = DEMO_VIDEO_PATH || await ensureDemoFile();
   console.log('[server-peer] start video source', {
     width: WIDTH,
     height: HEIGHT,
     fps: FPS,
-    demoPath: DEMO_VIDEO_PATH || 'testsrc'
+    demoPath
   });
   const frameSize = Math.floor(WIDTH * HEIGHT * 1.5);
   let buffer = Buffer.alloc(0);
   let frames = 0;
 
   const command = ffmpeg();
-  if (DEMO_VIDEO_PATH) {
-    command.input(DEMO_VIDEO_PATH).inputOptions(['-stream_loop', '-1']);
-  } else {
-    command.input(`testsrc=size=${WIDTH}x${HEIGHT}:rate=${FPS}`).inputFormat('lavfi');
-  }
+  command.input(demoPath).inputOptions(['-stream_loop', '-1']);
 
   command
     .outputOptions([
@@ -161,6 +190,7 @@ function createPeerConnection(socket, remoteId) {
 function createSignalingClient() {
   const peers = new Map();
   let stopMedia = null;
+  let stopMediaPromise = null;
 
   const socket = new WebSocket(SIGNALING_URL);
 
@@ -182,7 +212,11 @@ function createSignalingClient() {
         if (!peers.has(id)) {
           const peerState = createPeerConnection(socket, id);
           peers.set(id, peerState);
-          if (!stopMedia) stopMedia = peerState.startMedia();
+          if (!stopMediaPromise) {
+            stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
+              console.error('[server-peer] startMedia failed', err);
+            });
+          }
         }
       }
       return;
@@ -192,7 +226,11 @@ function createSignalingClient() {
       if (!peers.has(msg.peerId)) {
         const peerState = createPeerConnection(socket, msg.peerId);
         peers.set(msg.peerId, peerState);
-        if (!stopMedia) stopMedia = peerState.startMedia();
+        if (!stopMediaPromise) {
+          stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
+            console.error('[server-peer] startMedia failed', err);
+          });
+        }
       }
       return;
     }
@@ -210,7 +248,11 @@ function createSignalingClient() {
       const peerState = peers.get(msg.from) || createPeerConnection(socket, msg.from);
       if (!peers.has(msg.from)) {
         peers.set(msg.from, peerState);
-        if (!stopMedia) stopMedia = peerState.startMedia();
+        if (!stopMediaPromise) {
+          stopMediaPromise = peerState.startMedia().then((stop) => { stopMedia = stop; }).catch((err) => {
+            console.error('[server-peer] startMedia failed', err);
+          });
+        }
       }
 
       const pc = peerState.pc;
