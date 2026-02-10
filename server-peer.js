@@ -77,7 +77,7 @@ async function startVideoSource(source) {
     fps: FPS,
     demoPath
   });
-  const frameSize = Math.floor(WIDTH * HEIGHT * 1.5);
+  const expectedFrameSize = Math.floor(WIDTH * HEIGHT * 1.5);
   let buffer = Buffer.alloc(0);
   let frames = 0;
 
@@ -106,18 +106,25 @@ async function startVideoSource(source) {
   const stream = command.pipe();
   stream.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
-    while (buffer.length >= frameSize) {
-      const frame = buffer.subarray(0, frameSize);
-      buffer = buffer.subarray(frameSize);
+    while (buffer.length >= expectedFrameSize) {
+      const frame = buffer.subarray(0, expectedFrameSize);
+      buffer = buffer.subarray(expectedFrameSize);
       frames += 1;
       if (frames % 60 === 0) {
         console.log('[server-peer] frames pushed', frames);
       }
-      source.onFrame({
-        width: WIDTH,
-        height: HEIGHT,
-        data: new Uint8ClampedArray(frame.buffer, frame.byteOffset, frame.byteLength)
-      });
+      if (frame.byteLength !== expectedFrameSize) {
+        console.warn('[server-peer] frame size mismatch', frame.byteLength, expectedFrameSize);
+      }
+      try {
+        source.onFrame({
+          width: WIDTH,
+          height: HEIGHT,
+          data: new Uint8ClampedArray(frame.buffer, frame.byteOffset, expectedFrameSize)
+        });
+      } catch (err) {
+        console.error('[server-peer] onFrame error', err);
+      }
     }
   });
   stream.on('error', (err) => {
