@@ -77,9 +77,12 @@ async function startVideoSource(source) {
     fps: FPS,
     demoPath
   });
-  const expectedFrameSize = Math.floor(WIDTH * HEIGHT * 1.5);
+  let frameWidth = WIDTH;
+  let frameHeight = HEIGHT;
+  let expectedFrameSize = Math.floor(frameWidth * frameHeight * 1.5);
   let buffer = Buffer.alloc(0);
   let frames = 0;
+  let headerParsed = false;
 
   const command = ffmpeg();
   command.input(demoPath).inputOptions(['-stream_loop', '-1']);
@@ -92,7 +95,7 @@ async function startVideoSource(source) {
       '-vf', `scale=${WIDTH}:${HEIGHT}`,
       '-r', String(FPS)
     ])
-    .format('rawvideo')
+    .format('yuv4mpegpipe')
     .on('start', (cmd) => {
       console.log('[server-peer] ffmpeg start', cmd);
     })
@@ -106,21 +109,48 @@ async function startVideoSource(source) {
   const stream = command.pipe();
   stream.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
-    while (buffer.length >= expectedFrameSize) {
+    while (true) {
+      if (!headerParsed) {
+        const headerEnd = buffer.indexOf('\n');
+        if (headerEnd === -1) return;
+        const header = buffer.subarray(0, headerEnd).toString();
+        buffer = buffer.subarray(headerEnd + 1);
+        const wMatch = header.match(/W(\\d+)/);
+        const hMatch = header.match(/H(\\d+)/);
+        if (wMatch && hMatch) {
+          frameWidth = Number(wMatch[1]);
+          frameHeight = Number(hMatch[1]);
+          expectedFrameSize = Math.floor(frameWidth * frameHeight * 1.5);
+          console.log('[server-peer] y4m header', header, 'frameSize', expectedFrameSize);
+        }
+        headerParsed = true;
+        continue;
+      }
+
+      const markerEnd = buffer.indexOf('\n');
+      if (markerEnd === -1) return;
+      const marker = buffer.subarray(0, markerEnd).toString();
+      if (!marker.startsWith('FRAME')) {
+        buffer = buffer.subarray(markerEnd + 1);
+        continue;
+      }
+      buffer = buffer.subarray(markerEnd + 1);
+
+      if (buffer.length < expectedFrameSize) return;
       const frame = buffer.subarray(0, expectedFrameSize);
       buffer = buffer.subarray(expectedFrameSize);
+
       frames += 1;
       if (frames % 60 === 0) {
         console.log('[server-peer] frames pushed', frames);
       }
-      if (frame.byteLength !== expectedFrameSize) {
-        console.warn('[server-peer] frame size mismatch', frame.byteLength, expectedFrameSize);
-      }
       try {
+        const data = new Uint8ClampedArray(expectedFrameSize);
+        data.set(frame);
         source.onFrame({
-          width: WIDTH,
-          height: HEIGHT,
-          data: new Uint8ClampedArray(frame.buffer, frame.byteOffset, expectedFrameSize)
+          width: frameWidth,
+          height: frameHeight,
+          data
         });
       } catch (err) {
         console.error('[server-peer] onFrame error', err);
