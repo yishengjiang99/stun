@@ -14,6 +14,14 @@
     <div class="brand">P2P FaceBox</div>
     <div class="controls">
       <input id="roomInput" placeholder="Room ID" value="demo-room" />
+      <label class="media-option">
+        <input id="includeVideo" type="checkbox" checked />
+        <span>Video</span>
+      </label>
+      <label class="media-option">
+        <input id="includeAudio" type="checkbox" checked />
+        <span>Audio</span>
+      </label>
       <button id="joinBtn">Join</button>
       <button id="leaveBtn" disabled>Leave</button>
     </div>
@@ -40,6 +48,7 @@
         <canvas id="localCanvas"></canvas>
       </div>
       <div class="status" id="localStatus">Not connected</div>
+      <div class="status error hidden" id="mediaError"></div>
     </section>
 
     <section class="panel">

@@ -38,6 +38,8 @@ body {
 .controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 input, button {
@@ -59,6 +61,22 @@ button {
 button:disabled {
   background: #3a4a5a;
   cursor: not-allowed;
+}
+
+.media-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #2a3a4d;
+  background: #0f1822;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.media-option input {
+  margin: 0;
 }
 
 .grid {
@@ -103,6 +121,10 @@ video, canvas {
   margin-top: 10px;
   color: var(--muted);
   font-size: 14px;
+}
+
+.status.error {
+  color: var(--danger);
 }
 
 .hidden {

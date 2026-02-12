@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -155,14 +156,4 @@ if (isEntry) {
   server.listen(PORT, () => {
     console.log(`Signaling server running on http://localhost:${PORT}`);
   });
-
-  const startPeer = process.env.START_SERVER_PEER
-    ? process.env.START_SERVER_PEER === '1'
-    : true;
-
-  if (startPeer) {
-    import('./server-peer.js').catch((err) => {
-      console.error('[server-peer] failed to start', err);
-    });
-  }
 }

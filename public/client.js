@@ -1,9 +1,12 @@
 const joinBtn = document.getElementById('joinBtn');
 const leaveBtn = document.getElementById('leaveBtn');
 const roomInput = document.getElementById('roomInput');
+const includeVideo = document.getElementById('includeVideo');
+const includeAudio = document.getElementById('includeAudio');
 const localVideo = document.getElementById('localVideo');
 const localCanvas = document.getElementById('localCanvas');
 const localStatus = document.getElementById('localStatus');
+const mediaError = document.getElementById('mediaError');
 const remoteGrid = document.getElementById('remoteGrid');
 const remoteStatus = document.getElementById('remoteStatus');
 const localWrap = document.getElementById('localWrap');
@@ -91,9 +94,16 @@ async function refreshRooms() {
 }
 
 async function initLocalMedia() {
+  const wantsVideo = includeVideo.checked;
+  const wantsAudio = includeAudio.checked;
+  if (!wantsVideo && !wantsAudio) {
+    localStream = null;
+    return;
+  }
+
   localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
+    video: wantsVideo,
+    audio: wantsAudio
   });
   localVideo.srcObject = localStream;
 
@@ -103,6 +113,16 @@ async function initLocalMedia() {
       startFaceLoop(localVideo, localCanvas);
     }, { once: true });
   }
+}
+
+function showMediaError(message) {
+  mediaError.textContent = message;
+  mediaError.classList.remove('hidden');
+}
+
+function clearMediaError() {
+  mediaError.textContent = '';
+  mediaError.classList.add('hidden');
 }
 
 function setupFaceDetector() {
@@ -291,8 +311,12 @@ function isPolitePeer(remoteId) {
 function createPeerConnection(remoteId) {
   const pc = new RTCPeerConnection(rtcConfig);
 
-  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-  console.log('[pc] addTrack', remoteId, localStream.getTracks().map((t) => t.kind));
+  if (localStream) {
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+    console.log('[pc] addTrack', remoteId, localStream.getTracks().map((t) => t.kind));
+  } else {
+    console.log('[pc] addTrack', remoteId, []);
+  }
 
   let makingOffer = false;
   let ignoreOffer = false;
@@ -545,19 +569,39 @@ function cleanup() {
 
 joinBtn.addEventListener('click', async () => {
   joinBtn.disabled = true;
+  clearMediaError();
   roomId = roomInput.value.trim() || 'demo-room';
   setupFaceDetector();
   await setupObjectDetector();
-  await initLocalMedia();
+  try {
+    await initLocalMedia();
+  } catch (err) {
+    console.error('[media] getUserMedia failed', err);
+    const reason = err && err.name ? err.name : 'UnknownError';
+    showMediaError(`Failed to access selected media (${reason}). Check permissions/devices or uncheck Audio/Video and try again.`);
+    logStatus(localStatus, 'Not connected');
+    joinBtn.disabled = false;
+    return;
+  }
   setVideoVisibility(true);
+  if (!localStream || localStream.getVideoTracks().length === 0) {
+    localWrap.classList.add('hidden');
+  } else {
+    localWrap.classList.remove('hidden');
+  }
   connectSocket();
-  logStatus(localStatus, `Joined ${roomId}`);
+  if (!localStream) {
+    logStatus(localStatus, `Joined ${roomId} (no local media)`);
+  } else {
+    logStatus(localStatus, `Joined ${roomId}`);
+  }
   leaveBtn.disabled = false;
   await refreshRooms();
 });
 
 leaveBtn.addEventListener('click', () => {
   cleanup();
+  clearMediaError();
   leaveBtn.disabled = true;
   joinBtn.disabled = false;
   logStatus(localStatus, 'Not connected');

@@ -9,8 +9,8 @@ ExecStart=/usr/bin/node /root/stun/server.js
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
-Environment=PORT=3001
-Environment=SIGNALING_URL=ws://127.0.0.1:3001
+Environment=PORT=3005
+Environment=SIGNALING_URL=ws://127.0.0.1:3005
 Environment=FFMPEG_PATH=/usr/bin/ffmpeg
 
 # Hardening (optional)

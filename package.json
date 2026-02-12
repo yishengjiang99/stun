@@ -6,13 +6,10 @@
   "description": "P2P WebRTC video conferencing with face boxes",
   "scripts": {
     "start": "node server.js",
-    "start:peer": "node server-peer.js",
     "test": "node --test"
   },
   "dependencies": {
-    "ffmpeg-static": "^5.2.0",
-    "fluent-ffmpeg": "^2.1.2",
-    "wrtc": "^0.4.7",
+    "dotenv": "^16.4.7",
     "ws": "^8.18.0"
   }
 }
