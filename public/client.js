@@ -119,8 +119,9 @@ async function setupObjectDetector() {
       return;
     }
 
+    // Pin to v0.10.14 for stability (latest stable version as of implementation)
     const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
     );
 
     objectDetector = await ObjectDetector.createFromOptions(vision, {
@@ -191,6 +192,8 @@ function drawDetections(canvas, result) {
 }
 
 // Compatibility wrapper: some versions accept (video, timestampMs), some accept only (video).
+// MediaPipe Tasks Vision v0.10.8+ requires timestampMs parameter for VIDEO mode.
+// Earlier versions may not support it, so we check the function signature.
 function detectForVideoCompat(detector, input, timestampMs) {
   if (detector.detectForVideo.length >= 2) return detector.detectForVideo(input, timestampMs);
   return detector.detectForVideo(input);
@@ -225,7 +228,10 @@ function startObjectLoop(video, canvas) {
         drawDetections(canvas, result);
         lastVideoTime = video.currentTime;
       } catch (err) {
-        // ignore detection errors on some frames
+        // Ignore detection errors on some frames (e.g., video not ready)
+        if (err.message && !err.message.includes('ready')) {
+          console.debug('ObjectDetector error:', err.message);
+        }
       }
     }
 
@@ -236,6 +242,7 @@ function startObjectLoop(video, canvas) {
     if (typeof video.requestVideoFrameCallback === 'function') {
       video.requestVideoFrameCallback(loop);
     } else {
+      // Fallback to ~8 FPS when requestVideoFrameCallback is unavailable
       setTimeout(loop, 120);
     }
   };
@@ -266,6 +273,7 @@ function startFaceDetectionLoop(video, canvas) {
     if (typeof video.requestVideoFrameCallback === 'function') {
       video.requestVideoFrameCallback(loop);
     } else {
+      // Fallback to ~8 FPS when requestVideoFrameCallback is unavailable
       setTimeout(loop, 120);
     }
   };
