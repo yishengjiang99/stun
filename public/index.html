@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>P2P WebRTC Face Box</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- MediaPipe Tasks Vision bundle (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs"
+          crossorigin="anonymous"></script>
 </head>
 <body>
   <header class="topbar">
@@ -47,7 +50,7 @@
   </main>
 
   <footer class="footer">
-    Face detection uses the browser FaceDetector API if available.
+    Object detection uses MediaPipe ObjectDetector. Face detection uses the browser FaceDetector API if available.
   </footer>
 
   <script type="module" src="client.js"></script>

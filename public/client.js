@@ -17,6 +17,7 @@ let roomId = null;
 let localStream = null;
 let peers = new Map();
 let faceDetector = null;
+let objectDetector = null;
 let joinTime = 0;
 let roomsTimer = null;
 
@@ -110,6 +111,31 @@ function setupFaceDetector() {
   }
 }
 
+async function setupObjectDetector() {
+  try {
+    const { FilesetResolver, ObjectDetector } = window;
+    if (!FilesetResolver || !ObjectDetector) {
+      console.warn('MediaPipe Tasks Vision not available');
+      return;
+    }
+
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    );
+
+    objectDetector = await ObjectDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-tasks/object_detector/efficientdet_lite0_uint8.tflite",
+      },
+      scoreThreshold: 0.5,
+      runningMode: "VIDEO",
+    });
+  } catch (err) {
+    console.warn('Failed to initialize ObjectDetector', err);
+  }
+}
+
 function ensureCanvasSize(video, canvas) {
   const { videoWidth, videoHeight } = video;
   if (!videoWidth || !videoHeight) return;
@@ -130,12 +156,94 @@ function drawBoxes(canvas, faces) {
   }
 }
 
-function startFaceLoop(video, canvas) {
-  if (!faceDetector) {
-    logStatus(localStatus, 'FaceDetector not supported in this browser');
-    return;
-  }
+function drawDetections(canvas, result) {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  const detections = result?.detections ?? [];
+  for (const det of detections) {
+    const box = det.boundingBox;
+    if (!box) continue;
+
+    const cat = det.categories?.[0];
+    const label = cat?.categoryName ?? "object";
+    const score = typeof cat?.score === "number" ? cat.score : 0;
+
+    // Box
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "lime";
+    ctx.strokeRect(box.originX, box.originY, box.width, box.height);
+
+    // Label background
+    const text = `${label} ${(score * 100).toFixed(1)}%`;
+    ctx.font = "16px system-ui, sans-serif";
+    const tw = ctx.measureText(text).width;
+    const tx = Math.max(0, box.originX);
+    const ty = Math.max(18, box.originY);
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(tx, ty - 18, tw + 10, 22);
+
+    // Label text
+    ctx.fillStyle = "white";
+    ctx.fillText(text, tx + 5, ty - 2);
+  }
+}
+
+// Compatibility wrapper: some versions accept (video, timestampMs), some accept only (video).
+function detectForVideoCompat(detector, input, timestampMs) {
+  if (detector.detectForVideo.length >= 2) return detector.detectForVideo(input, timestampMs);
+  return detector.detectForVideo(input);
+}
+
+function startFaceLoop(video, canvas) {
+  // Prefer object detection over face detection
+  if (objectDetector) {
+    startObjectLoop(video, canvas);
+  } else if (faceDetector) {
+    startFaceDetectionLoop(video, canvas);
+  } else {
+    logStatus(localStatus, 'No detection API supported in this browser');
+  }
+}
+
+function startObjectLoop(video, canvas) {
+  let lastVideoTime = -1;
+
+  const loop = () => {
+    if (video.readyState < 2) {
+      scheduleNext();
+      return;
+    }
+
+    ensureCanvasSize(video, canvas);
+
+    if (video.currentTime !== lastVideoTime) {
+      try {
+        const t = performance.now();
+        const result = detectForVideoCompat(objectDetector, video, t);
+        drawDetections(canvas, result);
+        lastVideoTime = video.currentTime;
+      } catch (err) {
+        // ignore detection errors on some frames
+      }
+    }
+
+    scheduleNext();
+  };
+
+  const scheduleNext = () => {
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(loop);
+    } else {
+      setTimeout(loop, 120);
+    }
+  };
+
+  scheduleNext();
+}
+
+function startFaceDetectionLoop(video, canvas) {
   const loop = async () => {
     if (video.readyState < 2) {
       scheduleNext();
@@ -429,6 +537,7 @@ joinBtn.addEventListener('click', async () => {
   joinBtn.disabled = true;
   roomId = roomInput.value.trim() || 'demo-room';
   setupFaceDetector();
+  await setupObjectDetector();
   await initLocalMedia();
   setVideoVisibility(true);
   connectSocket();
