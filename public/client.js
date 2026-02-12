@@ -191,9 +191,9 @@ function drawDetections(canvas, result) {
   }
 }
 
-// Compatibility wrapper: some versions accept (video, timestampMs), some accept only (video).
-// MediaPipe Tasks Vision v0.10.8+ requires timestampMs parameter for VIDEO mode.
-// Earlier versions may not support it, so we check the function signature.
+// Compatibility wrapper for detectForVideo API.
+// MediaPipe Tasks Vision v0.10.8+ requires timestampMs for VIDEO mode.
+// This wrapper provides defensive coding in case the API signature varies across versions.
 function detectForVideoCompat(detector, input, timestampMs) {
   if (detector.detectForVideo.length >= 2) return detector.detectForVideo(input, timestampMs);
   return detector.detectForVideo(input);
@@ -228,10 +228,9 @@ function startObjectLoop(video, canvas) {
         drawDetections(canvas, result);
         lastVideoTime = video.currentTime;
       } catch (err) {
-        // Ignore detection errors on some frames (e.g., video not ready)
-        if (err.message && !err.message.includes('ready')) {
-          console.debug('ObjectDetector error:', err.message);
-        }
+        // Ignore transient detection errors (video state issues)
+        // Log unexpected errors for debugging
+        console.debug('ObjectDetector error:', err.message || err);
       }
     }
 
