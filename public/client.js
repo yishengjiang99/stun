@@ -206,7 +206,10 @@ function startFaceLoop(video, canvas) {
   } else if (faceDetector) {
     startFaceDetectionLoop(video, canvas);
   } else {
-    logStatus(localStatus, 'No detection API supported in this browser');
+    // Only update the local status when handling the local video/canvas
+    if (video === localVideo) {
+      logStatus(localStatus, 'No detection API supported in this browser');
+    }
   }
 }
 
